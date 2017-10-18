@@ -84,7 +84,6 @@ p {
 .content-section-a {
   padding: 50px 0;
   background-color: #99d4ff;
-  96beff
 }
 
 
@@ -94,7 +93,13 @@ p {
   border-top: 1px solid #e7e7e7;
   border-bottom: 1px solid #e7e7e7;
 }
-.content-section-b h1,.content-section-b p, .content-section-b h2  {
+.content-section-c {
+  padding: 50px 0;
+  background-color: white;
+}
+
+
+.content-section-b h1,.content-section-b p, .content-section-b h2, .content-section-b h3  {
   color:white;
 }
 
@@ -105,6 +110,16 @@ p {
 .section-heading-spacer {
   float: left;
   width: 350px;
+}
+
+.content-section-b h1 .content-section-a h1 {
+  font-size: 4rem;
+}
+.content-section-b h2 .content-section-a h2 {
+  font-size: 2.5rem;
+}
+.content-section-b p .content-section-a p {
+  font-size: 1.2rem;
 }
 .content-section-b .section-heading-spacer {
   border-top: 3px solid #ffffff;
