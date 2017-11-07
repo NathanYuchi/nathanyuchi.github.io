@@ -80,7 +80,10 @@ p {
   letter-spacing: 2px;
 }
 
-
+.btn-primary {
+  background-color: #ef4747;
+  border-color: #ef4747;
+}
 .content-section-a {
   padding: 50px 0;
   background-color: #d5e0f2;
@@ -89,7 +92,7 @@ p {
 
 .content-section-b {
   padding: 50px 0;
-  background-color: #3264c1;
+  background-color: #2f71ed;
   border-top: 1px solid #e7e7e7;
   border-bottom: 1px solid #e7e7e7;
 }
@@ -180,4 +183,17 @@ footer {
 
 p.copyright {
   margin: 15px 0 0;
+}
+
+.project-img {
+  max-width: 100%;
+}
+p.dark {
+  color: #262626;
+}
+div.project-desc {
+  background-color: #e5e9e7;
+}
+p.project-desc {
+  padding: 1.5em;
 }
