@@ -1,0 +1,241 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Mesh Editor</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2018</h1>
+<h1 align="middle">Project 4: Cloth Simulator</h1>
+<h2 align="middle">Nathan Yuchi, CS184-abi<h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>
+  In this projected we created a cloth and simulated its motion when acted upon by other forces, in this case, gravity.  We also implemented collisions so that the cloth could interact with other objects and interact with itself.  We first constructed the cloth and saw a way of representing a cloth using masses and springs.  During this section we also saw the 3 types of springs used and what each one does.  Next we implemented simulation.  In this section we revisited physics and calculated the force applied on the point masses from gravity and the force applied on the point masses from the springs using F = MA and Hooke's Law, respectively.  We also learned from the PROVOT paper that in order for cloth to seem realistic, the springs connecting the masses have a limit to how much they can stretch.  In the following section we implemented collisions with other objects.  I reused plane and sphere intersection equations from previous projects.  We also learned the proper positional correction needed to make a cloth seem like it was laying on an object.  Finally we implemented self collision.  In this section we prevent the cloth from clipping through itself in a method that isn't too computationally expensive.  We use hash tables and I still remembered the common hash equation from CS61B two years ago.  
+</p>
+<p>
+  Overall we built a simple cloth simulator with a cloth represented with springs and masses and is capable of falling, interacting with other objects in the environment, and interacting with itself.
+</p>
+
+<h2 align="middle">Part 1: Masses and springs</h2>
+<p>
+  First we have to create the cloth.  We do this by implementing a grid of point masses and springs.  The cloth has dimensions width * height and has <code> num_width_points * num_height_points</code> amount of point masses.  We first create the correct number of point masses and assign their position.  Depending on whether the orientation of the cloth is vertical or horizontal we assign the coordinates differently.  If the cloth is horizontal we set the y coordinate equal to one while varying positions over the xz plane.  If the cloth is vertical we set the z coordinate as a random number between -1/1000 and 1/1000 and vary over the xy plane.  We also check if a point mass is in the <code> pinned </code> vector, meaning that that point mass is pinned and its position does not change with external forces. We make sure to store the point masses in row major order.
+</p>
+<p>
+  After adding point masses to the grid we had to add springs to connect the point masses.  The three types of springs we had to implement were structural, shearing, and bending springs.  We loop through each point mass and make create the appropriate springs between masses. 
+</p>
+<h3> Sprong Sprong </h3>
+<img src="part1-1-1.png"  width="480px"/>
+<figcaption align="middle">All spring types</figcaption>
+<img src="part1-1-2.png" width="480px"/>
+<figcaption align="middle">Without shearing spring</figcaption>
+<img src="part1-1-3.png"  width="480px"/>
+<figcaption align="middle">Only shearing spring</figcaption>
+<h2 align="middle">Part 2: Simulation via numerical integration</h2>
+<p>
+  In this section we implemented simulation so that the cloth can fall due to gravity. First we calculated the force acted upon each point pass.  In this simulation we only have gravity as our external acceleration force source.  We calculate the force using the equation <code> F = ma </code> and apply the force to each point mass.  Then we calculate the spring correction forces using Hooke's law.
+</p>
+<img src="ree3.png" align="middle" width="480px"/>
+<p>
+  Where ks is the spring constant, pa and pb are the positions of the point masses the spring connects and l is the spring's rest length. We take the calculated spring force and apply it to one point mass'sforce and apply an equal but opposite force to the other point mass the springs connects to.  
+</p>
+<p>
+  Next we use Verlet integration to compute the new positions of the point masses. We make sure to not change the position of any point masses that we pinned in part 1.  Through approximation, simplification and the introduction of damping we arrive at the following equation:
+</p>
+<img src="ree4.png" align="middle" width="480px"/>
+<p>
+  Next, to make the cloth more rigid and realistic we follow the constraints from the SIGGRAPH 1995 Provot paper where for each spring, the spring length calculated as the distance between the two point masses it connects, has to be at most 110% of it's rest length.  To implement this we loop through every spring, check its length and then calculate a correction vector which we apply half to one point mass and half to another.
+</p>
+
+<h3>Change in ks</h3>
+<p>
+  Because ks is the string constant which measures how stiff a spring is, the lower the ks was, the stretchier and more flexible the cloth was. The cloth has more folds and also ripples more when it moves. When ks is higher, the cloth becomes stiffer.  The cloth fell stiffly, and also has less folds and ripples.
+</p>
+<img src="part2-1-1.png"  width="480px"/>
+<figcaption align="middle">ks = 100</figcaption>
+<img src="part2-1-2.png" width="480px"/>
+<figcaption align="middle">ks = 5000</figcaption>
+<img src="part2-1-3.png"  width="480px"/>
+<figcaption align="middle">ks = 20000</figcaption>
+
+<h3>Change in density</h3>
+  The changes in density can be most shown in pictures by how low the fold at the top middle is.  The higher the density, the more the cloth sags.  While it can't be shown in screenshots, the higher the density of the cloth was, the cloth also fell faster.
+<p>
+</p>  
+<img src="part2-2-1.png" align="middle" width="480px"/>
+<figcaption align="middle">density = 1</figcaption>
+<img src="part2-2-2.png" align="middle" width="480px"/>
+<figcaption align="middle">density = 15</figcaption>
+<img src="part2-2-3.png" align="middle" width="480px"/>
+<figcaption align="middle">density = 200</figcaption>
+
+<h3> Change in damping </h3>
+<p>
+  Damping is also hard to show in screenshots because damping affects the motion of the cloth more than its resting position. Damping is how oscillations decay so the higher the damping, the less ikely it is for a spring to vary from its resting length.  So when damping decreases, the spring takes longer to return to a resting state and the cloth also takes longer.  With low damping, the cloth swings back and forth for a while before returning to a resting position.  With high damping, the cloth falls down and then swings back and forth just the smallest amount before coming to a rest.
+</p>
+<img src="part2-3-1.png" align="middle" width="480px"/>
+<figcaption align="middle">No change in damping</figcaption>
+<img src="part2-3-2.png" align="middle" width="480px"/>
+<figcaption align="middle">very low damping back swing</figcaption>
+<img src="part2-3-3.png" align="middle" width="480px"/>
+<figcaption align="middle">very high damping</figcaption>
+
+<h3> pinned4.json </h3>
+<img src="part2-4-1.png" align="middle" width="480px"/>
+
+
+<h2 align="middle">Part 3: Handling collisions with other objects</h2>
+<h3> Spheres </h3>
+<p>
+  To implement collision with spheres we check if a point mass has intersected a sphere.  If it has we calculate the coordinates of the point where the point mass intersected the sphere using the sphere-ray intersection equation.  The ray's origin was a point mass' last_position and the direction was formed by the vector between last_position and it's current position.
+</p>
+<img src="ree.png" align="middle" width="480px"/>
+<p>
+  We calculate a correction vector which is the difference between the point mass' last position and the tangent point and apply it to the point mass' last position.  We also have to account for friction and therefore scale down the correction vector by friction which is <code>(1 - f) </code>
+</p>
+<h3> Changing ks </h3>
+<p>
+  Changing ks values results in what was expected based on previous experiments with changing ks values.  The lower the ks value, the more flexible the cloth was and the higher it was, the more stiff the cloth was. 
+</p>
+<div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part3-1-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">ks = 500</figcaption>
+                    </td>
+                    <td>
+                        <img src="part3-1-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">ks = 5000</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part3-1-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">ks = 50000</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+<h3> Planes </h3>
+<p>
+  To implement collision with planes I used ray-plane intersection. The ray is found in the same way as the sphere collision.
+  </p>
+  <img src="ree2.png" align="middle" width="480px"/>
+
+  <p> We are given the normal and a point on the plane and by substituting the values into the ray-plane intersection equation, we can find if the the point mass has gone into or below the plane.  We find the tangent point from the ray-plane equation and find the correction vector that is the difference between the tangent point and the point mass' last position.  We move the position up slightly by a constant <code> SURFACE_OFFSET</code> and also scale down the correction vector with friction.
+</p>
+<div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part3-2-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Peacefully on the plane</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+<h2 align="middle">Part 4: Handling self-collisions</h2>
+<p>
+  In previous parts we implemented collisions with other objects, but when we cause the coth to fall on itself it clipped through and failed to collide with itself.  One way to do so is to check each position of the cloth with every other position of the cloth; however, doing so results in a O(n^2) runtime, drastically slowing down run time.  To make self-collision faster, we use hash-tables.  First, we create 3D boxes with dimension w * h * t where <code>w = 3 * width / num_width_points </code>, <code> h = 3 * height / num_height_points </code>, and <code> t = max(w, h)</code>  We first hash each point on the cloth to find which 3D box it belongs to and then store these hash values in a hash map with key value equal to the hash value and value equal to a vector of the point masses belonging to that 3D box.  Then we implemented <code>self_collide</code> which for each point mass checks its 3D box using the hash map to see if any points are witin <code>2 * thickness </code> distance.  If so, then we adjust the point mass' position with a correction vector that is the average of the correction vectors of the point masses within <code> 2 * thickness </code> of the current point mass.
+</p>
+<div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part4-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Initial self-collision</figcaption>
+                    </td>
+                    <td>
+                        <img src="part4-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Early self-collision</figcaption>
+                    </td>
+                </tr>
+                <br>
+                <tr>
+                    <td>
+                        <img src="part4-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Laying on ground(1/2)</figcaption>
+                    </td>
+                    <td>
+                        <img src="part4-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Laying on ground(2/2)</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+<h3>Varying ks and Density </h3>
+<p>
+  The results we get from changing ks and density are expected given the modifications to these two parameters in previous parts.  When ks is decreased, the cloth becomes more flexible and its state of rest has more folds in it.  When ks is increased, the cloth becomes more stiff and has less folds at its rest state.  
+  </p>
+  <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part4-6.png" align="middle" width="480px"/>
+                        <figcaption align="middle">ks = 500</figcaption>
+                    </td>
+                    <td>
+                        <img src="part4-5.png" align="middle" width="480px"/>
+                        <figcaption align="middle">ks = 5000</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part4-7.png" align="middle" width="480px"/>
+                        <figcaption align="middle">ks = 50000</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+  <p>
+    When density is increased the cloth has a tendency to stay closer to together at its resting point and when density is decreased, the cloth is more spread that than when its density was higher.  Because I'm running on a virtual machine and the simulation is very slow, I am unable to tell if the cloth falls faster if density is increased and slower when density is decreased; however, I would assume a higher density means the cloth falls faster.
+  </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="part4-8.png" align="middle" width="480px"/>
+                        <figcaption align="middle">density = 15</figcaption>
+                    </td>
+                    <td>
+                        <img src="part4-9.png" align="middle" width="480px"/>
+                        <figcaption align="middle">density = 1500</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+</body>
+</html>

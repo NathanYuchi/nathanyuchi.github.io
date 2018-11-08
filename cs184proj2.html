@@ -1,0 +1,251 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Mesh Editor</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2018</h1>
+<h1 align="middle">Project 2: Mesh Editor</h1>
+<h2 align="middle">Nathan Yuchi, CS184-abi</h2>
+
+<br><br>
+
+<div>
+  <h2 align="middle">Overview</h2>
+  <p>In this project I first learned how to implement Bezier curves in 2D and in 3D using 1D de Casteljau subdivison and 2D de Castejau subdivision, respectively.  After implementing Bezier curves and surfaces I was able to see how the coordinates of the control points and how the t-value affected the resulting Bezier curve or surface.
+  </p>
+  <p> In part 3 I learned how to compute the vertex normal for a given vertex. In this section I also about the halfedge data structure and how to traverse a mesh using halfedge pointers.  I saw how using the vertex normal smooths out a mesh and how it changes the lighting.
+  </p>
+  <p> In part 4 and 5 I learned how to implement halfedge operations by drawing out diagrams, labelling every part, and exhaustively assigning variables according to the new diagram.  In these two parts I also learned how flips and splits affected a mesh and how a combination of flips and splits resulted in different results. 
+  </p> 
+  <p>In part 6 I learned how to implement loop subdivision using the previously implemented parts.  In this section I saw how loop subdivison increased the number of triangles in a mesh, smoothed out edges and corners, and sometimes skewed a mesh.  I also saw how runtime and quality were related in upsampling.  At a certain amount of upsamping, the difference in the meshes isn't noticeable; however, it took longer to interact with the mesh and to render it.
+  </p>
+
+</div>
+
+<h2 align="middle">Section I: Bezier Curves and Surfaces</h2>
+
+<h3 align="middle">Part 1: Bezier curves with 1D de Casteljau subdivision</h3>
+
+<div align="middle">
+  <p>De Casteljau's algorithm takes a number of control points and a number 0<=t<=1.  It then finds points between each control point using linear interpolation and t.  De casteljau continues recursively until there is only 1 point remaining.</br></br>  I implemented it in part 1 with the function <code>BezierCurve::evaluateStep()</code>  evaluateStep() performs one step of de Castejau's algorithm by looping through each control point and calculating new control point coordinates using a control point, the previous control point, and t.  When there is only 1 control point left, evaluateStep() immediately returns because the algorithm is complete. </p>
+</div>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="bezier1.png" align="middle" width="400px"/>
+        <figcaption align="middle">First.</figcaption>
+      </td>
+      <td>
+        <img src="bezier2.png" align="middle" width="400px"/>
+        <figcaption align="middle">Second.</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="bezier3.png" align="middle" width="400px"/>
+        <figcaption align="middle">Third.</figcaption>
+      </td>
+      <td>
+        <img src="bezier4.png" align="middle" width="400px"/>
+        <figcaption align="middle">Fourth.</figcaption>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <img src="bezier5.png" align="middle" width="400px"/>
+        <figcaption align="middle">Fifth.</figcaption>
+      </td>
+      <td>
+        <img src="bezier6.png" align="middle" width="400px"/>
+        <figcaption align="middle">Final.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div align="middle">
+<img src="bezier7.png" align="middle" width="400px"/>
+        <figcaption align="middle">Moved points and changed t.</figcaption>
+</div>
+<h3 align="middle">Part 2: Bezier surfaces with separable 1D de Casteljau subdivision</h3>
+
+<div align="middle">
+  <p>de Castejau's algorithm extends to Bezier surfaces by calculating Bezier curves for each of the rows of the grid and then by calculating the Bezier curve using the points computed by the Bezier row curve points as control points.  </br></br>   I implemented this by implementing the helper function <code>BezierPatch::evaluate1D()</code>.  evaluate1D() calculates the Bezier curve of 4 points using methods similar to part1, but instead of doing only 1 step, doing all steps until only 1 point remains. Then I implemented <code>BezierPatch::evaluate()</code>. evaluate() calls evaluate1D(), using the passed in value u as t, for each row and creates a new vector that stores the control points for each row control point.  Then calls evalate1D() again, using v as t, on the newly created vector. </p>
+</div>
+
+<div align="middle">
+<img src="part2.png" align="middle" width="400px"/>
+        <figcaption align="middle">Rendering of bez/teapot.bez</figcaption>
+</div>
+
+
+<h2 align="middle">Section II: Sampling</h2>
+<h3 align="middle">Part 3: Average normals for half-edge meshes</h3>
+
+<div align="middle">
+  <p>For part 3 I implemented it through <code>Vertex::normal( void )</code>.  For a vertex I went to the surronding faces using half-edge traversal using the <code>next()</code> and <code>twin()</code> methods.  When the loop returned to the original halfedge stored in <code>h_orig</code>, the loop terminated.  For each face I calculated the cross product of two vectors pointing away from the original central vertex using the built in cross product function in Vector3D.  I got the two vectors by getting the other two vertices in the face using the <code>next()</code> and <code>twin()</code> methods and then calculated the vectors by subtracting the central vertex's position from each one, respectively.  I had a bug with the ordering of the cross product but after a review of the right-hand rule, fixed the ordering so that the resulting vector was pointing away from the original central vertex.  I summed the cross product from each face and then returned the normalized vector the sum using Vector3D's <code>unit()</code> function.</p>
+</div>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="part3-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">Mesh view without smoothed normals.</figcaption>
+      </td>
+      <td>
+        <img src="part3-2.png" align="middle" width="400px"/>
+        <figcaption align="middle">Shader view without smoothed normals.</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="part3-3.png" align="middle" width="400px"/>
+        <figcaption align="middle">Mesh view with smoothed normals.</figcaption>
+      </td>
+      <td>
+        <img src="part3-4.png" align="middle" width="400px"/>
+        <figcaption align="middle">Shader view with smoothed normals.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+<h3 align="middle">Part 4: Half-edge flip</h3>
+
+<div align="middle">
+  <p>I implemented the half-edge flip operation by following <a href="http://15462.courses.cs.cmu.edu/fall2015content/misc/HalfedgeEdgeOpImplementationGuide.pdf">http://15462.courses.cs.cmu.edu/fall2015content/misc/HalfedgeEdgeOpImplementationGuide.pdf</a> </br></br>
+  I followed the guide and for the parts that I had to fill in myself I looked at the diagram provided and set assignments according to that diagram.  I didn't have an "eventful" debugging journey because I think that the article provided covered the steps pretty well.</p>
+</div>
+
+<div align="middle">
+<img src="part4.png" align="middle" width="400px"/>
+        <figcaption align="middle">Teapot with some flipped edges</figcaption>
+</div>
+<h3 align="middle">Part 5: Half-edge split</h3>
+
+<div align="middle">
+  <p>For part 5 I did what was suggested in the CMU guide.  I drew a diagram of two triangles with an edge in the middle and labeled every single halfedge, edge, face, and vertex.  Then I drew a diagram of four triangles and labeled the 16 half-edges 5 vertices, 8 edges, and 4 faces.  I then implemented <code>HalfedgeMesh::splitEdge( EdgeIter e0 )</code> by consulting the diagram and exhaustively assigning all members of each variable.  I also didn't have an eventful debugging journey for this part because I checked many times to mke sure my diagram was correct and assigned members while double and triple checking my diagram.  I did mis-assign some members of a halfedge but I fixed it after checking my diagram again.</p>
+       
+</div>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="part5-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">Only edge splits.</figcaption>
+      </td>
+      <td>
+        <img src="part5-2.png" align="middle" width="400px"/>
+        <figcaption align="middle">Edge splits with edge flips.</figcaption>
+      </td>
+    </tr>
+  </table></div>
+<h3 align="middle">Part 6: Loop subdivision for mesh upsampling</h3>
+
+<div align="middle">
+  <p>For part 6 I followed both the walkthrough on the assignment website and the TODOs in the code itself.  First I looped through each vertex and set its isNew attribute to false.  Then I looped through each edge and set its isNew attribute to false.  I calculated the new position of each old vertex using <pre>(1 - n*u) * original_position + u * neighbor_position_sum</pre> and stored it in each vertex's newPosition variable where n is the degree of the vertex and u = 3/16 if (n==3) else u = 3/(8n).  I took the print_neighbor_positions() function from the half-edge article and modified it slightly to get neighbor_position_sum.  I then calculated the updated vertex positions associated with edges using the function <pre>3/8 * (A + B) + 1/8 * (C + D)</pre>  where AB are the connecting vertices of the edge being split and CD are the vertices flanking A and B.  Next I split every edge that is part of the original mesh.  I check if an edge is part of the original mesh by checking if the two vertices that the edge connects both have <code>isNew = false </code> I had to modify the split function from part 5 by setting setting the isNew variables for the newly created edges and newly created vertex accordingly.  Then I set the newly created vertex's newPosition to the split edge's newPosition.  Next I flipped every edge that was new and connected an old vertex and a new vertex.  Finally, for each vertex I set its position to the previously calculated newPosition. </p>
+</div>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="part6-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">No upsampling.</figcaption>
+      </td>
+      <td>
+        <img src="part6-2.png" align="middle" width="400px"/>
+        <figcaption align="middle">1 iteration of upsampling.</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="part6-3.png" align="middle" width="400px"/>
+        <figcaption align="middle">2 iterations of upsampling.</figcaption>
+      </td>
+      <td>
+        <img src="part6-4.png" align="middle" width="400px"/>
+        <figcaption align="middle">3 iterations of upsampling.</figcaption>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <img src="part6-5.png" align="middle" width="400px"/>
+        <figcaption align="middle">4 iterations of upsampling.</figcaption>
+      </td>
+      <td>
+        <img src="part6-6.png" align="middle" width="400px"/>
+        <figcaption align="middle">5 iterations of upsampling.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div align="middle">
+  <h3>Round Cube</h3>
+  <p>When you upsample a mesh, the sharp corners and edges of the mesh become rounded.  This is because upsampling takes the weighted average of its neighboring vertices so that when  vertices on the edge are pulled in given the original mesh of the cube.  For the edges and corners of the cube to remain sharper, vertices on the edges or corners have to neighbor other vertices on the the edge or corner.  I made the cube sharper after upsampling by pre-splitting along the edges of the cube so that there were more vertices on the edge.  This way, the new position of vertices would be calculated using vertices that agree with the vertex being looked at.</p>
+</div>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="part6-9.png" align="middle" width="400px"/>
+        <figcaption align="middle">Pre-splitting on cube edges.</figcaption>
+      </td>
+      <td>
+        <img src="part6-10.png" align="middle" width="400px"/>
+        <figcaption align="middle">Cube remains more cube-like.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div align="middle">
+  <h3>Asymmetric Cube</h3>
+  <p>I think that the cube becomes asymmetric ater repeated subvision steps because of the diagonal edge on each face of the cube.  Because there is only 1 diagonal edge instead of two symmetic ones, when the cube becomes upscaled, it becomes skewed in the orientation of that one edge.</br> </br>To fix this I pre-processed the cube by spltting the diagonal edge on each face so that the edges on each face of the cube were symmetric.</p>
+</div>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="part6-7.png" align="middle" width="400px"/>
+        <figcaption align="middle">Split on the faces on the cube.</figcaption>
+      </td>
+      <td>
+        <img src="part6-8.png" align="middle" width="400px"/>
+        <figcaption align="middle">Symmetric cube after upsampling.</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

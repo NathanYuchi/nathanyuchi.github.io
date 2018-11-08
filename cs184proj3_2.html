@@ -1,0 +1,445 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>  
+    div.padded {  
+      padding-top: 0px;  
+      padding-right: 100px;  
+      padding-bottom: 0.25in;  
+      padding-left: 100px;  
+    }  
+  </style> 
+<title>Nathan Yuchi  |  CS 184</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+<body>
+<br />
+<h1 align="middle">Assignment 3: PathTracer</h1>
+    <h2 align="middle">Nathan Yuchi | CS184-abi</h2>
+
+    <div align = "middle" class="padded">
+      <h2> Part 1: Mirror and Glass Materials</h2>
+
+      <p>
+        To implement mirror and glass materials we first wrote <code>BSDF::reflect()</code> and <code>BSDF::refract()</code>.  <code>reflect()</code> takes a vector and since we are working in object space, we just have to change the z-coordinate of the input vector. <code>refract()</code> takes an vector wo and returns a vector wi that is the result of refracting wo.  We are given a value η (eta) that coressponding to the ratio of old index of refraction to new index of refraction.  Using Snell's equations we can calculate:
+        <pre>
+          wi.x = -eta * wo.x;
+          wi.y = -eta * wo.y;
+          wi.z = sqrt(1 - (eta * eta) * (1 - wo.z * wo.z));
+        </pre>
+        We also check the case where <code>(1 - (eta * eta * (1 - cos_theta(wo) * cos_theta(wo)))) < 0)</code>  If this is true, then that means we have total internal relection and return false.
+      </p>
+      <p>
+        Next we implemented <code>MirrorBSDF::f(), MirrorBSDF::sample_f()</code>. We just return an empty spectrum from <code>f()</code> to prevent double counts with delta BSDFs.  In <code>sample_f()</code> we return <code>reflectance / abs_cos_theta(*wi) </code> because mirrors change ray direction but don't cause Lambertian falloff.  We also set the probability density functin to 1 because mirrors are delta BSDFs.
+      </p>
+      <p>
+        Finally, we implemented <code>GlassBSDF::f(), GlassBSDF::sample_f()</code>.  <code> f() </code> just returns an empty spectrum.  In glass objects, both refraction and reflection occur.  To approximate the ratio we use Sclick's approximation to decide whether the ray input into <code>sample_f()</code> refracts or reflects.  If the randomly choose to reflect, we calculate the reflection using the previously implemented <code>reflect()</code> function and return <code> R * reflectance / abs_cos_theta(*wi)</code>.  If we choose to refract we calculate the refracted vector using <code>refract()</code> and return <code> (1-R) * transmittance / abs_cos_theta(*wi) / eta^2</code>
+      </p>
+
+      <h3>Different Max Ray Depths</h3>
+
+      <p> When <code>max_ray_depth = 0</code> we return emission and since the light is the only emission source we can only see the light.  When <code> max_ray_depth = 1</code> we just return direct lighting.  When <code> max_ray_depth = 2</code>, we some reflection on the mirror ball; however the shadow underneath of it is still dark.  The glass ball shows only some refraction because most rays terminate before they can refract outside of it.  When <code> max_ray_depth = 3 </code>, we see the light refracted by the glass ball and the shadows underneath the mirror ball become lighter.  If <code> max_ray_depth > 3 </code>, the images start to look similar.  The glass ball refracts underneath of it and creates a caustic.  There is also a caustic that appears on the blue wall when max_ray_depth is increased further.  The shadows underneath the mirror ball become brighter up to a limit.
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part1-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 0</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part1-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 1</figcaption>
+                    </td>
+                </tr>
+                <br>
+                <tr>
+                    <td>
+                        <img src="images/part1-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 2</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part1-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 3</figcaption>
+                    </td>
+                </tr>
+                <br>
+                <tr>
+                    <td>
+                        <img src="images/part1-5.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 4</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part1-6.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 5</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/part1-7.png" width="480px" />
+                        <figcaption align="middle">max_ray_depth = 100</figcaption>
+                </tr>
+            </table>
+        </div>
+
+      <h2> Part 2: Microfacet Material</h2>
+      <p>
+        To implement microfacet materials we first implement the BRDF evaluation function <code>MicrofacetBSDF::f() </code> by returning:
+        <pre>
+          (F(wi)*G(wo, wi)*D(h)) / (4 * dot(n, wo) * dot(n, wi))
+        </pre>
+        We will fill in the needed function <code>F(), D()</code> as we progress through this part.  
+      </p>
+      <p>
+        Next we implemented the normal distribution function <code>D()</code>.  In this project we're assuming that microfacets are perfectly specular so the only microfacets who have a normal along the half vector given and incoming and outgoing directions reflect.  So we query the normal distribution function at the half vector using the Beckmann distribution. 
+      </p>
+      <p>
+        We then calculate the fresnal term in <code>F()</code>.  We set an eta and k values in the .dae file we are rendering and calculate the Fresnal term using the proper equations for each channel r, g, and b.  Then we return a spectrum of composed of the Fresnel term for each color.
+      </p>
+      <p>
+        Finally, we can also implement importance sampling for microfacet materials with <code>MicrofacetBSDF::sample_f()</code>.  In this function we want to sample θ  and ϕ according to their respective probability density functions and then get the microfacet normal.  With the provided pθ and pϕ functions we calculate the pdfs then use the inversion method by integrating and inversing the pdfs.  With θ and ϕ we can get h.  The final step is to calculate the pdf of sampling h with respect to solid angle and calculate the pdf of sampling wi with respect to solid angle, giving us out final return value.
+      </p>
+      <h3> Changing Alpha Values </h3>
+      <p>
+        As we increase the alpha value of the microfacet model, the model becomes brighter and the color of the material of the model becomes more apparent.
+      </p>
+      <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/dragon1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">α = .005</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/dragon2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">α = .05</figcaption>
+                    </td>
+                </tr>
+              <tr>
+                    <td>
+                        <img src="images/dragon3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">α = .25</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/dragon4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">α = .5</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <h3> Uniform vs Importance for Microfacet </h3>
+        <p>
+          As we can see in the following images, uniform cosine sampling is insufficient for microfacet materials.  When using uniform cosine sampling, we get a lot of noise and also cannot see the what the material is.  By using importance sampling, not only do we clear up the noise, but we also see the metal that the bunny is made out of.
+        </p>
+      <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part2-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Uniform Cosine Sampling</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part2-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Importance Sampling</figcaption>
+                    </td>
+                </tr>
+              
+            </table>
+        </div>
+        <h3> Using Different Materials </h3>
+        <p>
+          At first I choose bismuth because it naturally appears as a rainbow color and was curious if that effect would be present by changing k and eta values.  It wasn't and I thought the bunny looked similar to the copper bunny, except more green.  I then changed the material to platinum and the bunny is very bright and silvery.
+          <br>
+          <br>
+          Bismuth:
+          <pre>
+            eta.r = 2.2260
+            eta.g = 2.0273
+            eta.b = 1.7531
+          </pre>
+          <pre>
+            k.r = 3.0795
+            k.g = 2.8541
+            k.b = 2.5252
+          </pre>
+          Platinum:
+          <pre>
+            eta.r = 0.46138
+            eta.g = 0.46608
+            eta.b = 0.58870
+          </pre>
+          <pre>
+            k.r = 5.9022
+            k.g = 5.0942
+            k.b = 3.9742
+          </pre>
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part2-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Platinum Bunny</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part2-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Bismuth Bunny</figcaption>
+                    </td>
+                </tr>
+              
+            </table>
+        </div>
+    <h2> Part 3: Environment Map Lights</h2>
+    <p>
+      First we implemented <code>EnvironmentLight::sample_dir()</code> which takes a direction and samples the environment map at a location.  We use the helper functions <code> dir_to_theta_phi, theta_phi_to_xy </code> to get the proper coordinates and then use the provided <code>bilerp</code> function that samples the envMap from the calculated coordinates.  We also modify <code>est_radiance_global_illumination,at_least_one_bounce_radiance </code>.  If no intersection occurs and there is an environment light, we render from the environment map.  If the sampled ray does not interesect and there is an environment light, we use <code>sample_dir()</code> as the sampled radiance.
+    </p>
+    <p>
+      Next we implemented <code>EnvironmentLight::sample_L()</code>.  We sample a random direction on the sphere and transform the direction to x,y coordinates using the helper functions and return a sample from the environment map using the <code>bilerp()</code> function.  We set PDF to 1/4PI because we are sampling from a sphere and set the distance to light to infinity because we are assuming environment lights are an infinite distance away.
+    </p>
+    <p>
+      Finally, we implemented importance sampling in <code>EnvironmentLight::init()</code>.  The started code converts the environment map to a 2D probability density function. We have to normalize the pdf map by dividing each index by the sum of all indices.  We then have to calculate the cumulative marginal distribution and store it in the array <code>marginal_y</code>.  We then calculate the conditional distributions given Bayes' rule and store it in <code>conds_y</code>. With this array we know the conditional distribution of each x given each y. Next we change <code>EnvironmentLight::sample_L()</code>.  We get a sample [0, 1]^2.  Then we look at <code>marginal_y</code> for the first index where the marginal distribution is greater than the sampled y with <code>std::upper_bound()</code>. Given y, we look at <code>conds_y</code> for the first x-index that is greater than our sampled x.  We take our calculated x and y indicies and convert to a direction using the helper functions and set wi to that direction.  We then calculate the pdf of our calculated x and y coordinates by querying <code>pdf_envmap</code> and multiply by a factor that comes from switching between probability densities.  
+    </p>
+     <h3>EXR to JPG </h3>
+    <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/doge.jpg" width="480px" />
+                        <figcaption align="middle">doge.exr to JPG</figcaption>
+                </tr>
+            </table>
+        </div>
+        
+    <h3>Probability Debug </h3>
+    <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/probability_debug.png" width="480px" />
+                        <figcaption align="middle">Probability Debug with doge.exr</figcaption>
+                </tr>
+            </table>
+        </div>
+
+        <h3> bunny_unlit.dae Uniform vs Importance</h3>
+        <p>
+          Not much difference.  Importance sampling seems to have more black spots at 64 sample per light.  When samples per light is decreased, uniform sampling has more noise.
+        </p>
+    <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part3-3-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Uniform</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part3-3-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Importance</figcaption>
+                    </td>
+                </tr>
+              
+            </table>
+        </div>
+        <h3> bunny_microfacet_cu_unlit.dae Uniform vs Importance</h3>
+        <p>
+          Not much difference when sampled at 64 samples per light.  At lower sample per light, there is more noise in uniform sampling.
+        </p>
+    <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part3-3-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Uniform</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part3-3-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Importance</figcaption>
+                    </td>
+                </tr>
+              
+            </table>
+        </div>        
+    <h2>  Part 4: Depth of Field </h2>  
+    <p>
+      To implement thin_lens we wrote <code>Camera::generate_ray_for_thin_lens()</code>  This function takes two additional parameters rndR and rndTheta that are random numbers uniformly distributed in [0, 1). We take our code from project 3-1 to get a ray direction that corresponds to a ray going through the center of a lens, with no distortion.  We then sample the disk representing a thin lens with
+       <pre>
+        (lensRadius*√rndR⋅cos(2π rndTheta),lensRadius √rndR⋅sin(2π rndTheta),0)
+      </pre>
+      We then calculate the point of intersection between the plane of focus with our original ray using plane-ray intersection.  Next we calculate the ray that originates from the sampled origin that goes in the direction of the previously calculated point of intersection.  We perform the same normalization and conversion from camera to world on the newly calculated ray and return it.
+    </p> 
+
+    <h3> Focus Stack </h3>
+    <p>
+      By changing the focal length while keeping the aperture the same size, the camera focuses on different parts of the dragon.
+    </p>
+    <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part3-4-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part3-4-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                </tr>
+              <tr>
+                    <td>
+                        <img src="images/part3-4-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part3-4-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                </tr>
+              
+            </table>
+        </div>   
+    <h3> Differing Aperture Sizes </h3>
+    <p>
+      By keeping focal length the same while changing aperture, we focus on the same part of the dragon.  As aperture increases, the depth of field decreases and the area that is in focus becomes smaller.  When the aperture is sufficiently large, the entire image will be in focus.
+    </p>
+    <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part3-4-5.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part3-4-6.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                </tr>
+              <tr>
+                    <td>
+                        <img src="images/part3-4-7.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part3-4-8.png" align="middle" width="480px"/>
+                        <figcaption align="middle"></figcaption>
+                    </td>
+                </tr>
+              
+            </table>
+        </div>       
+    <h2 align="middle">Part 5: Shaders</h2>
+    <a href="gl/index.html">gl Directory</a>
+    <p>
+      In this part, we implemet different shading use opengl.  By doing so, we can shade using a GPU instead of CPU and renderings can be done much faster and even in real-time.  First we implemented diffuse shading, something we have done in the past. First, we calculate <code>fNormal, fPosition, gl_position</code> in <code>diffuse.vert</code> by transforming the inputs from model space to world space. We take the equation for diffuse lighting: <code> Ld=kd (I/r^2) max(0,n⋅l)</code> and implement it in <code>diffuse.frag</code>  
+    </p>
+    <p>
+      In task 2, we implemented Blinn-Phong lighting to the teapot.  This gives us specular lighting effects and makes the teapot look shiny.  A more thorough explanation of Blinn-Phong is given below.  As a result our sphere now has a texture mapped onto it.
+    </p>
+    <p>
+      In task 3, we implemented texture mapping.  Given coordinates u and v, we can use the built-in function <code>texture2D</code> to sample the passed in texture at the given coordinates.
+    </p>
+    <p>
+      In task 4, we implemented bump mapping and displacement mapping.  In bump mapping, we change the normal vectors of an object so that it looks like it has texture; however the object remains the same shape.  We do this bi first calculating a tangent-bitangent-normal matrix that transforms a vector in object space to model space.  We do this by taking the cross product of the given normal and tangent, giving us the bitangent.  The TBN matrix is then [tangent, bitangent, normal].  We then calculate local space normals by calculating the differences in height when we change the coordinates u,v.  We use the equations :
+      <pre>
+        dU=(h(u+1/w,v)−h(u,v))∗kh∗kn
+        dV=(h(u,v+1/h)−h(u,v))∗kh∗kn
+      </pre>
+      where kh is the height scaling factor and kn is the normal scaling factor. For <code>h()</code> we just choose to use the r component of a color vector at the given coordinates.  Our resulting normal is <code>TBN * (-dU, -dV, -1)</code>.  In displacement mapping we not only modify the normal, we also modify the position of the verticies so that the object has actual physical texture.  We calculate the new position of the vertex using the equation:
+      <pre>
+        p′=p+n∗h(u,v)∗kh
+      </pre>
+    </p>
+    <p>
+      In task 5, we were asked to create our own shader.  I made it so that the sphere goes back and forth given the time variable.  A more in depth explanation is given below.
+    </p>
+    <h3> Blinn - Phong</h3>
+    <p>
+      Blinn-Phong shading adds together 3 different light components to get a rendering.  It adds together ambient, diffuse, and specular lighting.  Ambient lighting is the color of the object when under a shadow.  Because the teapot is gray-ish, we can just choose to say it is black under a shadow.  Diffuse lighting is what we implemented in task 1.  Diffuse lighting is the color of the object when it is under white light, the teapot looks true-to-color under the light with diffuse lighting and gets darker as the light curls around.  Specular light is the light of a reflection off of the object, given it a shiny-ness.  The equation for Blinn-Phong lighting is as follows: 
+      <pre>
+        L=ka Ia +kd (I/r^2) max(0,n⋅l) +ks (I/r^2) max(0,n⋅h)^p
+      </pre>
+    </p>
+    <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part5-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Ambient</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part5-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Diffuse</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part5-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Specular</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <h3> Custom Texture </h3>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part5-6.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Custom Texture</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/renwick.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Texture</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <h3> Mesh Courseness </h3>
+        <p>
+          On the left we see the spheres with vertical and horizontal = 256, on the right the vertical and horizontal components = 512. All are rendered using displacement3.png On the right we can clearly see that by increasing the number of vertical and horizonyal components, the courseness of the sphere increases.
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part5-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Vertical, Horizontal = 256</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part5-5.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Vertical, Horizontal = 512</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <h3> Custom Shader </h3>
+        <p>
+          For the custom shader I built off of the test shader given to use in the code.  I kept the color chanaging from .frag but changed .vert.  What I did was take a modulus division of time by 10.  If the result was greater than 5, I used 10-mod instead. Then I added the result to the position.  The goal was to get the sphere to move in a back and forth manner.  Because the sphere is rotating, the movement of the sphere ends up looking flower-like if viewed from a top-down angle.
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part5-7.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Sphere moving closer</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+
+        
+</div>
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,426 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>  
+    div.padded {  
+      padding-top: 0px;  
+      padding-right: 100px;  
+      padding-bottom: 0.25in;  
+      padding-left: 100px;  
+    }  
+  </style> 
+<title>Nathan Yuchi  |  CS 184</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+<body>
+<br />
+<h1 align="middle">Assignment 3: PathTracer</h1>
+    <h2 align="middle">Nathan Yuchi cs184-abi</h2>
+
+    <div class="padded">
+
+    <h2 align="middle">Part 1: Ray Generation and Intersection</h2>
+        <h3 align = "middle">Ray Generation</h3>
+        <p>
+            For ray generation I implemented two functions, <code>pathtracer:ray_trace_pixel</code> and
+            <code>camera:generate_ray</code>.  In ray_trace_pixel, if <pre>ns_aa == 1</pre> we only have
+        to generate 1 ray through the center of the pixel at <pre>(x + .5, y + .5)</pre>
+        Otherwise we generate ns_aa random rays using PathTracer's gridSampler.  For each
+            coordinate generated, whether it was the single ray through the middle of the pixel
+            or a randomly generated ray, we had to scale the coordinate down to [0,1] by dividing
+            by width or height.  Then we passed the coordinates into generate_ray to get the ray.
+        </p>
+        <p>
+            In generate_ray we want to map the passed in coordinates so that it represented
+            a point on the picture plane.  We do this with by interpolating using:
+            <pre> x = ((x * 2.) - 1 ) * tan(radians(hFov)*.5)</pre>
+            <pre> y = ((y * 2.) - 1 ) * tan(radians(vFov)*.5)</pre>
+            We then want to convert the vector to world space by applying the multiplying the
+            transform matrix c2w by the interpolated x and y values.  The origin of the ray is
+            given to us in camera by the pos variable.  We also set ray's min_t and max_t to
+            nClip and fClip, respectively.
+        </p>
+        <h3 align = "middle"> Intersections </h3>
+        <p>
+            For intersect we had to implement the intersect functions in triangle.cpp and sphere.cpp.
+            In triangle::intersect we use the Moller Trumbore algorithm with the given p1, p2, p3.  Through
+            this algorithm we get t, b1, b2, where b1, b2 and (1-b1-b2) are barycentric alpha, beta, and
+            gamma.  If the calculated t is between the ray's min_t and max_t and b1,b2,(1-b1-b2) are
+            between 0 and 1 then the ray intersects the triangle.  We then set the passed in isect's values:
+            <pre>isect->t = t;</pre>
+            <pre>isect->n = (n1 * (1-b1-b2)) + (n2 * b1) +(n3 * b2);</pre>
+            <pre>isect->primitive = this;</pre>
+            <pre>isect->bsdf = get_bsdf();</pre>
+            We also set ray's max_t as t so future farther primitives are discarded.
+        </p>
+        <p>
+            For spheres I used the helped function sphere::test.  Test checked if ray intersected a sphere
+            using the algorithm provided in class and also set t0,t1 to the lower t intersection and upper
+            t intersection. If test returned true, we set isect's values as follows:
+            <pre>i->t = t;</pre>
+            <pre>i->n = normal(r.o + t*r.d);</pre>
+            <pre>i->primitive = this;</pre>
+            <pre>i->bsdf = get_bsdf();</pre>
+            The t we use depends on which on is the closer hit point and we also set ray's max_t to the t we chose.
+        </p>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/part1.png" width="480px" />
+                    <figcaption align="middle">The box shows triangle intersection and the balls show sphere intersection</figcaption>
+                </tr>
+            </table>
+        </div>
+    <h2 align="middle">Part 2: Bounding Volume Hierarchy</h2>
+        <h3 align = "middle">Constructing the BVH</h3>
+        <p>
+            To construct the BVH we implemented the function BVHAccel:construct_bvh.  If the number of the primitives
+            passed in was less than or equal to max_leaf_size, we used the starter code to create a node without l or r
+            and with a vector of primitives equal to the the primitives passed in.  If the number is greater than
+            max_leaf_size, I checked for the largest x,y,z axis using bbox's extent and calculated the midpoint.  Then
+            I looped through each primitive. If a primitive's coordinate for the chosen axis was less than the midpoint,
+            then I pushed it onto a newly created vector of primitives called left.  If it was greater, then it went to
+            the right vector.  If any of the newly created vectors were empty then I just moved one primitive from the non
+            empty vector to the empty one.  I then set the passed in node's left to a recursive call of construct_bvh
+            with the left vector passed in a did the same for the right.
+        </p>
+        <h3 align = "middle">BVH Intersection</h3>
+        <p>
+            To check intersections for a BVH we first had to implement the intersect function for bounding boxes inside of
+            bbox.cpp.  The intersect function used the axis-aligned-plane intersection equation and the ray and axis-aligned-box intersection
+            equation that we covered in lecture and also returned the interval of the t-values.
+        </p>
+        <p>
+            After implementing bbox::intersect we move onto BVHAccel::intersect.  First we check if the bounding box of the
+            BVH intersects using the previously implemented bbox::intersect.  If the bounding box doesn't intersect then we
+            don't have to continue checking for intersection and can return false.  If the bounding box does intersect, we then
+            check if the node of the bvh is a leaf node.  If the node is a leaf node, then we check every primitive of the node
+            and see if any intersect.  If the node is not a leaf node, we run BVHAccel::intersect recursively on the node's
+            left and right nodes.  We make sure to check intersection on both sides and not have || short circuit the check.
+            We make sure it doesn't short circuit because we are returning the smallest hit value and have to check if a smaller
+            hit value exists.
+        </p>
+        <h3 align = "middle">Large dae</h3>
+
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/cow.png" width="480px" />
+                        <figcaption align="middle">dae/meshedit/cow.dae</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/plank.png" width="480px" />
+                        <figcaption align="middle">dae/meshedit/maxplanck.dae</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/lucy.png" width="480px" />
+                        <figcaption align="middle">dae/sky/CBlucy.dae</figcaption>
+                </tr>
+            </table>
+        </div>
+        <h3 align = "middle">Rendering Speed</h3>
+        <p>
+            In the beginning of this section we were asked to render cow.dae without any BVH acceleration done.
+            On a VM on my personal computer it took 371 seconds to render.  After implementing BVH acceleration,
+            cow.dae rendered in 0.8629 seconds.  The speed up is very significant with BVH acceleration. BVH
+            acceleration speeds up rendering time because only the primitives that are intersected are rendered.
+            Without the implementation, rendering looks at every single primitive and checks for its intersection.
+            In BVH acceleration, it recursively checks if a bounding box intersects and if it doesn't, then any primitives
+            contained inside of that bounding box no longer have to be checked.
+        </p>
+        <h2 align="middle">Part 3: Direct Illumination</h2>
+        <h3 align = "middle">Uniform Hemisphere Sampling</h3>
+        <p>
+            Before implementing uniform hemisphere sampling or importance sampling, we had to first implement
+            <code>DiffuseBSDF::f</code> and <code>DiffuseBSDF::sample_f</code>.  Because we are working with diffuse BSDFs, the light is scattered
+            randomly so f and sample_f both return reflectance/PI.  For hemisphere sampling we sampling light uniformly in a hemisphere.
+            We do this by sampling from the given <code>hemisphereSampler</code> and cast a ray from the hit point in the direction of the
+            sampled direction.  If the ray intersects the scene, then we calculate the irradiance at the hit point by getting the
+            emission at the hitpoint.  We weight this emission by a probability density function, the BSDF, and a cosine term to get
+            the irradiance and return it.
+        </p>
+        <p>
+
+        </p>
+        <h3 align = "middle">Importance Sampling</h3>
+        <p>
+            For importance sampling we sample every light instead of uniformly sampling in a hemisphere. To do this we
+            implement <code>PathTracer::estimate_direct_lighting_importance</code>.  We loop over every light and check if a light is
+            a delta light.  If the light is a delta light, then we only have to sample from the light once, if it's not
+            a delta light, we sample ns_aa times.  We get a sample from a scene light using the light's sample_l function.
+            This function also gives us a directional <code>wi</code> vector, the distance to the light in <code>distToLight</code>,
+            and <code>pdf</code>, the probability density function.  We change <code>wi</code> to world space by multiplying it with the
+            transform matrix <code>w2o</code> to get <code>w_in</code>.  If <code>w_in.z < 0</code>, then we know that the sampled
+            light point is behind the surface and it doesn't matter for the rendering.  We then create a ray with
+            <pre>ray.origin= hit_p + (EPS_D * wi);</pre>
+            <pre>ray.direction = wi</pre>
+            <pre>ray.max_t = distToLight</pre>
+            If this ray does NOT intersect the bvh, then we calculate the light using the surface's bsdf function, the pdf, and
+            <code>wi.z</code>.
+            <pre>sample * w_in.z * isect.bsdf->f(w_out, w_in) / pdf</pre>
+        </p>
+        <h3 align = "middle">Direct vs Importance</h3>
+        <p>
+            We can see that with importance sampling, there is generally less noise than there is in uniform hemisphere
+            sampling.  I think this is because importance sampling covers delta lights while hemisphere sampling does not.
+            So where there are delta lights, hemisphere sampling fails to find the irradiance at those points, generating noise.
+            Importance sampling accounts for delta lights so the same noise generated from delta lights is not present.
+        </p>
+
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/bunnyH.png" width="480px" />
+                        <figcaption align="middle">Bunny with hemisphere sampling</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/bunnyI.png" width="480px" />
+                        <figcaption align="middle">Bunny with importance sampling</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                        <img src="images/dragon_64_32.png" width="480px" />
+                        <figcaption align="middle">Dragon with importance sampling</figcaption>
+                </tr>
+            </table>
+        </div>
+        <h3 align = "middle">Number of Light Rays vs Noise</h3>
+        <p>
+            As the number of light rays goes up, the noise decreases.
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/dragon_1_1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">1 light ray, 1 sample per pixel</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/dragon_1_4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">4 light ray, 1 sample per pixel</figcaption>
+                    </td>
+                </tr>
+                <br>
+                <tr>
+                    <td>
+                        <img src="images/dragon_1_16.png" align="middle" width="480px"/>
+                        <figcaption align="middle">16 light ray, 1 sample per pixel</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/dragon_1_64.png" align="middle" width="480px"/>
+                        <figcaption align="middle">64 light ray, 1 sample per pixel</figcaption>
+                    </td>
+                </tr>
+            </table>
+        </div>
+
+
+        <h2 align="middle">Part 4: Global Illumination</h2>
+        <h3 align = "middle">Indirect Lighting Implementation</h3>
+        <p>
+            To implement indirect lighting we had to modify <code>PathTracer::est_radiance_global_illumination</code> and
+            implement <code>PathTracer::at_least_one_bounce_radiance</code>, <code>PathTracer::one_bounce_radiance</code>, and
+            <code>PathTracer::zero_bounce_radiance</code>.  <code>PathTracer::zero_bounce_radiance</code> simply returned the
+            emission at the intersection point.  This function is needed for lights and other sources of emission to appear in
+            the rendered image.  <code>PathTracer::one_bounce_radiance</code> returns the correct direct illumination function from
+            part 3.
+        </p>
+        <p>
+            In <code>PathTracer::at_least_one_bounce_radiance</code>, we want to perform similar actions to part 3.  We calculate the
+            irradiance of a ray at a hit point, but then we recursively cast another ray leaving the hit point and add that ray's value
+            to our irradiance.  In order to prevent this from looping infinitely we have several measures in place.  First there is a
+            set max_ray_depth that terminates a ray after a certain number of bounces.  We also use the Russian Roulette strategy where
+            we terminate the ray with a set probability.  As we did in part 3, we weight the irradiance by a cosine term, the probability
+            density function.  In part 4 we also weight the irradiance by 1 - termination probability.
+        </p>
+
+        <h3 align = "middle">Rendered Images (Direct and Indirect)</h3>
+        <p>
+            With indirect lighting implemented we see that direct light from the walls contribute color to the spheres, showing
+            color bleeding onto the spheres.  The shadows under the spheres and on the spheres are also softer because indirect light
+            now hits those shadows, lightening them.
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part4-1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Spheres with direct + indirect</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part4-2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Bunny with direct + indirect</figcaption>
+                    </td>
+                </tr>
+            </table>
+
+        </div>
+
+        <h3 align = "middle">Direct vs Indirect Images</h3>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part4-3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Spheres with only direct</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part4-4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Spheres with only indirect</figcaption>
+                    </td>
+                </tr>
+            </table>
+
+        </div>
+        <h3 align = "middle">Bunny max_ray_depth Images</h3>
+        <p>
+            For the bunny image with <code>max_ray_depth = 0</code>, we return <code>zero_bounce_radiance</code>, which
+            returns emission.  Since only the light in the room has emission, only the light appears.  For <code>max_ray_depth = 1</code>,
+            we return <code>one_bounce_radiance + zero_bounce_radiance</code>.  <code>one_bounce_radiance</code> returns
+            direct illumination so bunny looks the same as it does in part 3.  For <code>max_ray_depth > 1</code>, we are now
+            return <code>at_least_one_bounce_radiance</code>.  If we increase max_ray_depth, the average size of ray depths
+            will increase and slightly more light will be shown from those longer rays.  We can see this most clearly in the
+            corners of the room.  As <code>max_ray_depth</code> increases, the shadows in the corners and edges of the room
+            become lighter.
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/bunny0.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 0</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/bunny1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 1</figcaption>
+                    </td>
+                </tr>
+                <br>
+                <tr>
+                    <td>
+                        <img src="images/bunny2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 2</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/bunny3.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 3</figcaption>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <img src="images/bunny100.png" align="middle" width="480px"/>
+                        <figcaption align="middle">max_ray_depth = 100</figcaption>
+                    </td>
+                </tr>
+            </table>
+
+        </div>
+
+        <h3 align = "middle">Various sample-per-pixel Images</h3>
+        <p>
+            As the number of samples per pixels goes up, the amount of noise decreases.
+        </p>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/spheres_1.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 1</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/spheres_2.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 2</figcaption>
+                    </td>
+                </tr>
+                <br>
+                <tr>
+                    <td>
+                        <img src="images/spheres_4.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 4</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/spheres_8.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 8</figcaption>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <img src="images/spheres_16.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 16</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/spheres_64.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 64</figcaption>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <img src="images/spheres_1024.png" align="middle" width="480px"/>
+                        <figcaption align="middle">sample_per_pixel = 1024</figcaption>
+                    </td>
+                </tr>
+            </table>
+
+        </div>
+        <h2 align="middle">Part 5: Adaptive Sampling</h2>
+        <h3 align = "middle">Implementation</h3>
+        <p>
+            To implement adaptive sampling we modified <code>PathTracer::raytrace_pixel</code>.  Adaptive sampling
+            lets us generate noise free images faster than sampling every pixel the passed in number of samples per pixel.
+            Some pixels converge faster so for those pixels we don't have to sample it as many times.
+            In <code>raytrace_pixel</code> we keep track of the number of samples done so far and calculate the mean and
+            standard deviation of the pixel we are currently on.  If the convergence variable <code>I=1.96⋅σ/√n</code> satisfies
+            the condition <code>I ≤ maxTolerance⋅μ</code>, then we can say the pixel has converged and no longer have to
+            sample the pixel. We calculate the mean and standard deviation by keeping track of the sum of each sample's illuminance (s1)
+            and the sum of each sample's illuminance squared (s2).  We can then use these two sums in the equations provided in the
+            spec.
+            <pre>mean = s1 / n</pre>
+            <pre>stdv ^ 2 = (1/(n-1)) * (s2 - (s1^2 / n))</pre>
+        </p>
+        <h3 align = "middle">Images</h3>
+        <div align="middle">
+            <table>
+                <tr>
+                    <td>
+                        <img src="images/part5.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Noise free</figcaption>
+                    </td>
+                    <td>
+                        <img src="images/part5_rate.png" align="middle" width="480px"/>
+                        <figcaption align="middle">Rate</figcaption>
+                    </td>
+                </tr>
+            </table>
+
+        </div>
+
+    </div>
+</body>
+</html>
+
+
+
+

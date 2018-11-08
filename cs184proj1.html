@@ -1,0 +1,157 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Rasterizer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2018</h1>
+<h1 align="middle">Project 1: Rasterizer</h1>
+<h2 align="middle">Nathan Yuchi, CS184-abi</h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>In this project I started off learning what rasterizing meant and then implemented it by rasterizing simple triangles. However, the triangles looked jaggy and then I learned how to use and implement supersampling to have antialiasing power. I observed that supersampling at higher rates was slower and therefore learned the relationship between runtime, supersampling, and antialiasing. In part 3 I learned what matrices corresponded to which transform.  By changing the action of the robot, I learned how to use different transforms and that the order of the transforms mattered. </p>
+<p>In parts 4-6 I learned what pixel sampling was and how to implement it. In order to implement pixel sampling I had to learn how to calculate barycentric coordinates and how to interpolate point coordinates.  I observed the difference between nearest, bilinear, and trilinear pixel sampling and how antialiasing, runtime and memory usage were affected.  I also learned how levels of texture affected pixel sampling. </p>
+
+<h2 align="middle">Section I: Rasterization</h2>
+
+<h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
+<p>To rasterize triangles you look at the bounding box of the triangle and for each pixel inside of the triangle, fill in the color.  You check if a pixel is inside using the 3 lines test provided in lecture. My method is no worse than looking at each pixel inside of the bounding box because that is what I do</p>
+<img src="images/part1.png" align="middle" width="400px"/>
+        <figcaption align="middle">Without supersampling, the triangle looks jaggy</figcaption>
+
+
+<h3 align="middle">Part 2: Antialiasing triangles</h3>
+
+<p>I made changes to the rasterization pipelie by not only checking each pixel in the bounding box f the triangle, but also at each subpixel in each pixel.  I checked each subpixel similarly to in part1 and filled in if it passed the 3 lines.  I also changed get_color so that get_color returns an average of all the sub_pixels of a pixel.</p>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/part2-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">Sample rate:1</figcaption>
+      </td>
+      <td>
+        <img src="images/part2-2.png" align="middle" width="400px"/>
+        <figcaption align="middle">Sample rate:4</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/part2-3.png" align="middle" width="400px"/>
+        <figcaption align="middle">Sample Rate:16</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+
+<h3 align="middle">Part 3: Transforms</h3>
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/part3.png" align="middle" width="400px"/>
+      </td>
+      <td>
+        <img src="images/qwop.png" align="middle" width="400px"/>
+      </td>
+    </tr>
+    <br>
+  </table>
+</div>
+<p align="middle"> An obvious 1:1 recreation </p>
+
+
+<h2 align="middle">Section II: Sampling</h2>
+
+<h3 align="middle">Part 4: Barycentric coordinates</h3>
+<img src="images/part4-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">In a tradition 2d coordinate system, the coordinates refer to the x and y position of a vertex.  In a barycentric system, the coordinates are relative to the positions of the vertices of a polygon, not the x-y axis.  The closer a vertex is a to a triangle "point", the greater the corresponding barycentric coordinate is.  </figcaption>
+
+<img src="images/part4-2.png" align="middle" width="400px"/>
+
+<h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
+
+<p>Instead of filling in a pixel with a pre-defined color, pixel sampling looks at a source image or texture and maps colors from the source to the pixels. To implement texture mapping in this project, we calculated the pixel's barycentric coordinates, then calculated the pixel's (u,v) coordinates.  Then we looked at the texture file and depending on which pixel sampling method was used, either looked at the closest texel or the 4 closest texels. In nearest pixel sampling, you use the texture from the texel closest to the interpolated pixel coordinates.  In bilinear smapling, you use the 4 texels closest to the interpolated pixel coordinates and weight the texels based on how close the pixel coordinate is to each one. </p>
+<div align="middle">
+
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/part5-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">Nearest at 1 sample/pixel</figcaption>
+      </td>
+      <td>
+        <img src="images/part5-2.png" align="middle" width="400px"/>
+        <figcaption align="middle">Nearest at 16 sample/pixel</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/part5-3.png" align="middle" width="400px"/>
+        <figcaption align="middle">Bilinear at 1 sample/pixel</figcaption>
+      </td>
+      <td>
+        <img src="images/part5-4.png" align="middle" width="400px"/>
+        <figcaption align="middle">Bilinear at 16 sample/pixel</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+<p> In both nearest pixel sampling pictures, the lines on the map are disconnected.  In both bilinear sampling pictures, the lines are connected.  In both cases, when more samples are done per pixel, there are less "jaggies" and the pictures look smoother. There will be a difference between the two sampling methods when there are fine details such as the lines on the map. The difference occurs because nearest may "miss" the texture because it only looks at 1 texel while bilinear covers a wider area of texture.  </p>
+
+<h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
+<p> Level sampling is the same as pixel sampling except the resolution of the source image/texture is different. At a lower level, the resolution is higher, and as the level increases, the resolution decreases.  I implemented level sampling with the level formula given in lecture that uses the interpolated pixel coordinates, and the difference of these coordinates from their floor.  For nearest level, I just passed the level into nearest pixel sampling from part 5.  For tri-linear sampling I used the bilinear sampling function from part 5 and passed in the two adjacent levels and then weighted the returned color with how close the calculated level was from the adjaceent ones.  Increasing level uses less memory and has more antialiasing; however, the antialiasing can become blur.  Nearest pixel sampling is faster than bilinear or trilinear sampling; however, has less antialiasing power.</p>
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/part6-1.png" align="middle" width="400px"/>
+        <figcaption align="middle">L_ZERO and P_NEAREST</figcaption>
+      </td>
+      <td>
+        <img src="images/part6-2.png" align="middle" width="400px"/>
+        <figcaption align="middle">L_ZERO and P_LINEAR</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/part6-3.png" align="middle" width="400px"/>
+        <figcaption align="middle">L_NEAREST and P_NEAREST</figcaption>
+      </td>
+      <td>
+        <img src="images/part6-4.png" align="middle" width="400px"/>
+        <figcaption align="middle">L_NEAREST and P_LINEAR</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>
